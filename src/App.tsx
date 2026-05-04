@@ -324,26 +324,35 @@ export default function App() {
       let encodedData = null;
       let encodedName = null;
       let gistUrls: string[] = [];
+      let shortGistIds: string[] = [];
 
       if (window.location.hash) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         encodedData = hashParams.get('d');
         encodedName = hashParams.get('n');
         gistUrls = hashParams.getAll('g');
+        shortGistIds = hashParams.getAll('gi');
       } else {
         const queryParams = new URLSearchParams(window.location.search);
         encodedData = queryParams.get('d');
         encodedName = queryParams.get('n');
         gistUrls = queryParams.getAll('g');
+        shortGistIds = queryParams.getAll('gi');
       }
+
+      // Reconstruct full URLs from shortened IDs
+      const allGists = [...gistUrls];
+      shortGistIds.forEach(id => {
+        allGists.push(`https://gist.github.com/${id}`);
+      });
 
       const loadedDatasets: Dataset[] = [];
 
       // Priority: Gist URLs if present
-      if (gistUrls.length > 0) {
+      if (allGists.length > 0) {
         setIsLoading(true);
         try {
-          for (const url of gistUrls) {
+          for (const url of allGists) {
             const result = await fetchGistData(url);
             const { cleaned, locationCol } = cleanGPSData(result.data);
             
@@ -466,72 +475,83 @@ export default function App() {
     
     setIsSharing(true);
     try {
-      const dataToShare = activeDataset.data;
-      const locations: string[] = [];
-      const getLocIdx = (loc: string) => {
-        let idx = locations.indexOf(loc);
-        if (idx === -1) {
-          idx = locations.length;
-          locations.push(loc);
-        }
-        return idx;
-      };
-
-      const bLat = Math.round(dataToShare[0].lat * 1e6);
-      const bLong = Math.round(dataToShare[0].long * 1e6);
-      const bTime = dataToShare[0].time.getTime();
-      const bTemp = Math.round(dataToShare[0].temp * 10);
-      const bLocIdx = getLocIdx(dataToShare[0].location || "");
-
-      let lastLat = bLat;
-      let lastLong = bLong;
-      let lastTime = bTime;
-      let lastTemp = bTemp;
-
-      const deltas = [];
-      for (let i = 1; i < dataToShare.length; i++) {
-        const curLat = Math.round(dataToShare[i].lat * 1e6);
-        const curLong = Math.round(dataToShare[i].long * 1e6);
-        const curTime = dataToShare[i].time.getTime();
-        const curTemp = Math.round(dataToShare[i].temp * 10);
-        const curLocIdx = getLocIdx(dataToShare[i].location || "");
-
-        deltas.push([
-          curLat - lastLat,
-          curLong - lastLong,
-          curTime - lastTime,
-          curTemp - lastTemp,
-          curLocIdx
-        ]);
-
-        lastLat = curLat;
-        lastLong = curLong;
-        lastTime = curTime;
-        lastTemp = curTemp;
-      }
-
-      const compactData = {
-        v: 2,
-        ls: locations,
-        b: [bLat, bLong, bTime, bTemp],
-        bli: bLocIdx,
-        d: deltas
-      };
-
-      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(compactData));
       const url = new URL(window.location.origin + window.location.pathname);
       const hashParams = new URLSearchParams();
       
-      // Include active dataset's data for fallback/direct viewing
-      hashParams.set('d', compressed);
-      hashParams.set('n', activeDataset.name);
-      
-      // Include ALL loaded Gist URLs
-      datasets.forEach((d, i) => {
+      // 1. Handle Gist datasets (Shorten them)
+      const gistIds: string[] = [];
+      datasets.forEach((d) => {
         if (d.url) {
-          hashParams.append('g', d.url);
+          // Extract ID from Gist URL: https://gist.github.com/user/ID
+          const matches = d.url.match(/gist\.github\.com\/([^\/]+\/[a-f0-9]+)/i);
+          if (matches && matches[1]) {
+            gistIds.push(matches[1]);
+          } else {
+            hashParams.append('g', d.url); // Fallback to full URL
+          }
         }
       });
+      
+      gistIds.forEach(id => hashParams.append('gi', id));
+
+      // 2. Only encode local data if active dataset is local (no URL)
+      if (!activeDataset.url) {
+        const dataToShare = activeDataset.data;
+        const locations: string[] = [];
+        const getLocIdx = (loc: string) => {
+          let idx = locations.indexOf(loc);
+          if (idx === -1) {
+            idx = locations.length;
+            locations.push(loc);
+          }
+          return idx;
+        };
+
+        const bLat = Math.round(dataToShare[0].lat * 1e6);
+        const bLong = Math.round(dataToShare[0].long * 1e6);
+        const bTime = dataToShare[0].time.getTime();
+        const bTemp = Math.round(dataToShare[0].temp * 10);
+        const bLocIdx = getLocIdx(dataToShare[0].location || "");
+
+        let lastLat = bLat;
+        let lastLong = bLong;
+        let lastTime = bTime;
+        let lastTemp = bTemp;
+
+        const deltas = [];
+        for (let i = 1; i < dataToShare.length; i++) {
+          const curLat = Math.round(dataToShare[i].lat * 1e6);
+          const curLong = Math.round(dataToShare[i].long * 1e6);
+          const curTime = dataToShare[i].time.getTime();
+          const curTemp = Math.round(dataToShare[i].temp * 10);
+          const curLocIdx = getLocIdx(dataToShare[i].location || "");
+
+          deltas.push([
+            curLat - lastLat,
+            curLong - lastLong,
+            curTime - lastTime,
+            curTemp - lastTemp,
+            curLocIdx
+          ]);
+
+          lastLat = curLat;
+          lastLong = curLong;
+          lastTime = curTime;
+          lastTemp = curTemp;
+        }
+
+        const compactData = {
+          v: 2,
+          ls: locations,
+          b: [bLat, bLong, bTime, bTemp],
+          bli: bLocIdx,
+          d: deltas
+        };
+
+        const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(compactData));
+        hashParams.set('d', compressed);
+        hashParams.set('n', activeDataset.name);
+      }
       
       url.hash = hashParams.toString();
       navigator.clipboard.writeText(url.toString());
@@ -793,25 +813,16 @@ export default function App() {
           >
             <MapIcon className="w-5 h-5" />
           </Button>
-          <div className="bg-red-500 p-1.5 md:p-2 rounded-lg hidden xs:block">
-            <Thermometer className="w-4 h-4 md:w-5 md:h-5 text-white" />
-          </div>
           <div>
-            <h1 className="text-sm md:text-lg font-bold tracking-tight">TempRoute Viz</h1>
-            <p className={cn(
-              "text-[8px] md:text-[10px] uppercase tracking-widest font-semibold",
-              isDarkMode ? "text-slate-400" : "text-slate-500"
-            )}>GPS Analysis</p>
+            <h1 className="text-sm md:text-lg font-bold tracking-tight text-foreground">TempRoute Viz</h1>
+            <p className="text-[8px] md:text-[9px] uppercase tracking-widest font-bold text-muted-foreground">GPS Fleet Analysis</p>
           </div>
         </div>
 
         {/* Header Content Update */}
         <div className="flex items-center gap-2 md:gap-4">
           {datasets.length > 0 && (
-            <Badge variant="secondary" className={cn(
-              "hidden lg:flex border transition-colors duration-300",
-              isDarkMode ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"
-            )}>
+            <Badge variant="secondary" className="hidden lg:flex border border-border bg-muted/50 text-muted-foreground font-bold text-[10px]">
               {datasets.length} Vehicles
             </Badge>
           )}
@@ -885,18 +896,18 @@ export default function App() {
         )}>
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Controls</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Controls</span>
               <Button 
                 variant="ghost" 
                 size="icon" 
                 className={cn(
-                  "w-6 h-6 rounded-md transition-colors",
-                  isPinned ? "text-red-500 bg-red-500/10" : "text-slate-400 hover:text-slate-600"
+                  "w-6 h-6 rounded-md transition-all",
+                  isPinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
                 onClick={() => setIsPinned(!isPinned)}
                 title={isPinned ? "Unpin Sidebar" : "Pin Sidebar"}
               >
-                <Pin className={cn("w-3.5 h-3.5", isPinned && "fill-current")} />
+                <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
               </Button>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(false)}>
@@ -1000,30 +1011,27 @@ export default function App() {
                 </div>
               ))}
               {datasets.length === 0 && (
-                <div className="text-center py-6 px-4 border rounded-xl border-dashed border-slate-200 dark:border-slate-800">
-                  <Upload className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs text-slate-400">No vehicles added yet</p>
-                </div>
+                  <div className="text-center py-8 px-4 border border-dashed border-border bg-muted/20 rounded-xl">
+                    <Upload className="w-5 h-5 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">No vehicles added</p>
+                  </div>
               )}
             </div>
           </section>
 
           <section>
-            <h2 className={cn(
-              "text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2",
-              isDarkMode ? "text-slate-400" : "text-slate-500"
-            )}>
+            <h2 className="text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2 text-muted-foreground">
               <Info className="w-3 h-3" />
-              Playback Settings
+              Playback Engine
             </h2>
             <div className="space-y-6">
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-blue-500" />
-                    <Label className="text-sm font-medium">Playback Speed</Label>
+                    <Zap className="w-3.5 h-3.5 text-primary" />
+                    <Label className="text-xs font-bold uppercase tracking-tight text-foreground/80">Speed</Label>
                   </div>
-                  <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
                     {playbackSpeed}x
                   </span>
                 </div>
@@ -1038,29 +1046,29 @@ export default function App() {
                   }}
                   disabled={datasets.length === 0}
                 />
-                <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase">
-                  <span>1x</span>
-                  <span>600x</span>
+                <div className="flex justify-between text-[8px] text-muted-foreground font-bold uppercase tracking-widest px-1">
+                  <span>Normal</span>
+                  <span>Max Velocity</span>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm font-medium">Trail Duration</Label>
-                    <div className="flex items-center gap-1 ml-2">
-                      <Switch 
-                        id="permanent-trail"
-                        checked={isPermanentTrail}
-                        onCheckedChange={setIsPermanentTrail}
-                        className="scale-75"
-                        disabled={datasets.length === 0}
-                      />
-                      <Label htmlFor="permanent-trail" className="text-[10px] font-bold uppercase text-slate-400 cursor-pointer">Permanent</Label>
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-[11px] font-bold uppercase tracking-tight text-foreground/80">Trail</Label>
+                      <div className="flex items-center gap-1.5 ml-2">
+                        <Switch 
+                          id="permanent-trail"
+                          checked={isPermanentTrail}
+                          onCheckedChange={setIsPermanentTrail}
+                          className="scale-75"
+                          disabled={datasets.length === 0}
+                        />
+                        <Label htmlFor="permanent-trail" className="text-[9px] font-bold uppercase text-muted-foreground cursor-pointer tracking-wider">Infinite</Label>
+                      </div>
                     </div>
+                    <span className="text-[10px] font-mono font-bold text-muted-foreground">{isPermanentTrail ? '∞' : `${trailHours}h`}</span>
                   </div>
-                  <span className="text-xs font-mono text-slate-500">{isPermanentTrail ? 'All' : `${trailHours}h`}</span>
-                </div>
                 {!isPermanentTrail && (
                   <Slider
                     value={[trailHours || 7]}
@@ -1079,18 +1087,15 @@ export default function App() {
           </section>
 
           <section>
-            <h2 className={cn(
-              "text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2",
-              isDarkMode ? "text-slate-400" : "text-slate-500"
-            )}>
+            <h2 className="text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2 text-muted-foreground">
               <MapIcon className="w-3 h-3" />
-              Map Options
+              Viewport Config
             </h2>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30">
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                 <div className="flex items-center gap-2">
-                  {followMarker ? <Eye className="w-4 h-4 text-blue-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
-                  <Label className="text-xs font-medium cursor-pointer" htmlFor="follow-marker">Follow Marker</Label>
+                  {followMarker ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+                  <Label className="text-[11px] font-bold uppercase tracking-tight text-foreground/80 cursor-pointer" htmlFor="follow-marker">Dynamic Focus</Label>
                 </div>
                 <Switch
                   id="follow-marker"
@@ -1101,12 +1106,12 @@ export default function App() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30">
+                <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                   <div className="flex items-center gap-2">
-                    <Flame className={cn("w-4 h-4", showHighTempLayer ? "text-orange-500" : "text-slate-400")} />
+                    <Flame className={cn("w-4 h-4 transition-colors", showHighTempLayer ? "text-primary" : "text-muted-foreground")} />
                     <div className="flex flex-col">
-                      <Label className="text-xs font-medium cursor-pointer" htmlFor="high-temp-layer">Heat Event (&gt;30°C)</Label>
-                      <span className="text-[9px] text-slate-500 font-medium">Duration &gt;15 mins</span>
+                      <Label className="text-[11px] font-bold uppercase tracking-tight text-foreground/80 cursor-pointer" htmlFor="high-temp-layer">Thermal Pulse</Label>
+                      <span className="text-[9px] text-muted-foreground font-bold tracking-tight">Threshold: 30°C</span>
                     </div>
                   </div>
                   <Switch

@@ -1,6 +1,9 @@
 {
-  "name": "",
-  "description": "",
-  "requestFramePermissions": [],
-  "majorCapabilities": []
+  "name": "TempRoute Viz",
+  "description": "Minimalist high-precision thermal fleet GPS visualizer with White & Red aesthetic.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
 }

@@ -95,10 +95,7 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
   if (datasets.length === 0) return null;
 
   return (
-    <div className={cn(
-      "relative w-full h-full rounded-xl overflow-hidden border shadow-inner",
-      isDarkMode ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
-    )}>
+    <div className="relative w-full h-full rounded-2xl overflow-hidden border border-border shadow-xl">
       <MapContainer
         center={center}
         zoom={13}
@@ -132,12 +129,23 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
               }}
             >
               <Popup>
-                <div className="text-xs">
-                  <p className="font-bold underline" style={{ color: d.color }}>Vehicle: {d.name}</p>
-                  <p className="font-bold text-orange-600">High Temp Alert (&gt;30°C)</p>
-                  <p>Temp: {p.temp.toFixed(1)}°C</p>
-                  <p>Time: {formatInTimeZone(p.time, TIMEZONE, 'HH:mm:ss')}</p>
-                </div>
+                  <div className="text-[10px] p-2 leading-tight">
+                    <p className="font-bold uppercase tracking-widest mb-1 opacity-70" style={{ color: d.color }}>Vehicle: {d.name.split('.')[0]}</p>
+                    <p className="font-bold text-primary flex items-center gap-1 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      Thermal Alert (&gt;30°C)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-border">
+                      <div>
+                        <span className="text-[8px] uppercase text-muted-foreground block">Temp</span>
+                        <span className="font-mono font-bold">{p.temp.toFixed(1)}°</span>
+                      </div>
+                      <div>
+                        <span className="text-[8px] uppercase text-muted-foreground block">Time</span>
+                        <span className="font-mono font-bold">{formatInTimeZone(p.time, TIMEZONE, 'HH:mm')}</span>
+                      </div>
+                    </div>
+                  </div>
               </Popup>
             </CircleMarker>
           ));
@@ -220,50 +228,40 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
                   className="bg-transparent border-none shadow-none p-0 tooltip-custom"
                 >
                   <div className={cn(
-                    "px-1.5 py-0.5 rounded text-[10px] font-bold shadow-md border whitespace-nowrap",
+                    "px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md border whitespace-nowrap transition-colors",
                     currentPoint.temp > 30 
-                      ? "bg-red-500 text-white border-red-600" 
-                      : (isDarkMode ? "bg-slate-800 text-slate-100 border-slate-700" : "bg-white text-slate-900 border-slate-200")
+                      ? "bg-primary text-primary-foreground border-primary shadow-primary/30" 
+                      : "bg-card text-foreground border-border"
                   )}>
-                    {currentPoint.temp.toFixed(1)}°C
+                    {currentPoint.temp.toFixed(1)}°
                   </div>
                 </Tooltip>
                 <Popup className="custom-marker-popup">
-                  <div className={cn(
-                    "min-w-[220px] overflow-hidden rounded-lg shadow-xl border",
-                    isDarkMode ? "bg-slate-900 border-slate-700 text-slate-100" : "bg-white border-slate-200 text-slate-900"
-                  )}>
-                    <div className="px-3 py-2 text-white font-bold text-xs flex justify-between items-center" style={{ backgroundColor: d.color }}>
-                      <span>{d.name}</span>
-                      {currentPoint.temp > 30 && <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px] animate-pulse">HIGH TEMP</span>}
+                  <div className="min-w-[200px] overflow-hidden rounded-xl shadow-2xl border border-border bg-card">
+                    <div className="px-3 py-2 text-primary-foreground font-bold text-[10px] uppercase tracking-widest flex justify-between items-center" style={{ backgroundColor: d.color }}>
+                      <span className="truncate max-w-[120px]">{d.name.split('.')[0]}</span>
+                      {currentPoint.temp > 30 && <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px] animate-pulse">WARM</span>}
                     </div>
-                    <div className="p-3 space-y-2 text-[11px]">
-                      <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                        <span className="text-slate-500 font-medium">Date:</span>
-                        <span className="font-mono font-bold tracking-tight">{formatInTimeZone(currentPoint.time, TIMEZONE, 'dd/MM/yyyy')}</span>
+                    <div className="p-3 space-y-2 text-[10px]">
+                      <div className="flex justify-between items-center border-b border-border pb-1.5">
+                        <span className="text-muted-foreground font-bold uppercase tracking-tight">Timeline</span>
+                        <span className="font-mono font-bold text-foreground">{formatInTimeZone(currentPoint.time, TIMEZONE, 'HH:mm:ss')}</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                        <span className="text-slate-500 font-medium">Time:</span>
-                        <span className="font-mono font-bold tracking-tight">{formatInTimeZone(currentPoint.time, TIMEZONE, 'HH:mm:ss')}</span>
-                      </div>
-                      <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                        <span className="text-slate-500 font-medium">Temp:</span>
+                      <div className="flex justify-between items-center border-b border-border pb-1.5">
+                        <span className="text-muted-foreground font-bold uppercase tracking-tight">Reading</span>
                         <span className={cn(
-                          "font-bold font-mono text-[13px] px-1.5 py-0.5 rounded",
+                          "font-bold font-mono text-[12px] px-2 py-0.5 rounded-full",
                           currentPoint.temp > 30 
-                            ? "text-red-600 bg-red-50 dark:bg-red-900/40" 
-                            : (isDarkMode ? "text-blue-400 bg-blue-900/30" : "text-blue-600 bg-blue-50")
+                            ? "text-primary bg-primary/10 border border-primary/20" 
+                            : "text-muted-foreground bg-muted"
                         )}>
-                          {currentPoint.temp.toFixed(1)}°C
+                          {currentPoint.temp.toFixed(1)}°
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-500 font-medium block mb-1">Location:</span>
-                        <div className={cn(
-                          "p-2 rounded leading-relaxed text-[10px] break-words",
-                          isDarkMode ? "bg-slate-800/50" : "bg-slate-50"
-                        )}>
-                          {currentPoint.location || 'Unknown Location'}
+                      <div className="pt-1">
+                        <span className="text-muted-foreground font-bold uppercase tracking-tight block mb-1">Geolocation</span>
+                        <div className="p-2 rounded-lg bg-muted/30 border border-border leading-relaxed text-[9px] text-foreground/80 break-words font-medium">
+                          {currentPoint.location || 'Analyzing location...'}
                         </div>
                       </div>
                     </div>

@@ -27,48 +27,48 @@
 
 @layer base {
   :root {
-    --background: #f8fafc; /* slate-50 */
-    --foreground: #020617; /* slate-950 */
+    --background: #f1f5f9; /* slate-100 */
+    --foreground: #0f172a; /* slate-900 */
     --card: #ffffff;
-    --card-foreground: #020617;
+    --card-foreground: #0f172a;
     --popover: #ffffff;
-    --popover-foreground: #020617;
-    --primary: #020617;
-    --primary-foreground: #f8fafc;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #f1f5f9;
-    --accent-foreground: #0f172a;
-    --destructive: #ef4444;
-    --destructive-foreground: #f8fafc;
+    --popover-foreground: #0f172a;
+    --primary: #dc2626; /* red-600 */
+    --primary-foreground: #ffffff;
+    --secondary: #e2e8f0; /* slate-200 */
+    --secondary-foreground: #475569; /* slate-600 */
+    --muted: #e2e8f0; /* slate-200 */
+    --muted-foreground: #64748b; /* slate-500 */
+    --accent: #fef2f2; /* red-50 */
+    --accent-foreground: #991b1b; /* red-800 */
+    --destructive: #b91c1c; /* red-700 */
+    --destructive-foreground: #ffffff;
     --border: #e2e8f0;
     --input: #e2e8f0;
-    --ring: #020617;
-    --radius: 0.5rem;
+    --ring: #dc2626;
+    --radius: 0.75rem;
   }
 
   .dark {
     --background: #020617;
     --foreground: #f8fafc;
-    --card: #020617;
+    --card: #0b1120;
     --card-foreground: #f8fafc;
-    --popover: #020617;
+    --popover: #0b1120;
     --popover-foreground: #f8fafc;
-    --primary: #f8fafc;
+    --primary: #ef4444; /* red-500 */
     --primary-foreground: #020617;
     --secondary: #1e293b;
-    --secondary-foreground: #f8fafc;
+    --secondary-foreground: #cbd5e1;
     --muted: #1e293b;
     --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
-    --destructive: #7f1d1d;
+    --accent: #450a0a; /* red-950/50 */
+    --accent-foreground: #fecaca; /* red-200 */
+    --destructive: #991b1b;
     --destructive-foreground: #f8fafc;
     --border: #1e293b;
     --input: #1e293b;
-    --ring: #cbd5e1;
+    --ring: #ef4444;
   }
 
   html, body, #root {
