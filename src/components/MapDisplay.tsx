@@ -156,35 +156,50 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
             return t >= startTime && t <= endTime;
           });
 
+          const trailSegments: { color: string, positions: [number, number][] }[] = [];
+          if (trailPoints.length > 0) {
+            let currentSegment = {
+              color: getTempColor(trailPoints[0].temp),
+              positions: [[trailPoints[0].lat, trailPoints[0].long] as [number, number]]
+            };
+
+            for (let i = 1; i < trailPoints.length; i++) {
+              const p = trailPoints[i];
+              const color = getTempColor(p.temp);
+              
+              if (color === currentSegment.color) {
+                currentSegment.positions.push([p.lat, p.long]);
+              } else {
+                // End current segment and start new one
+                // To connect segments properly, the new segment should start with the last point of the previous segment
+                trailSegments.push(currentSegment);
+                currentSegment = {
+                  color,
+                  positions: [
+                    currentSegment.positions[currentSegment.positions.length - 1],
+                    [p.lat, p.long]
+                  ]
+                };
+              }
+            }
+            trailSegments.push(currentSegment);
+          }
+
           return (
             <React.Fragment key={`dataset-trail-${d.id}`}>
-              {trailPoints.length > 0 && (
-                <>
-                  {trailPoints.map((p, i) => {
-                    const line = i > 0 ? (
-                      <Polyline
-                        key={`line-${d.id}-${i}`}
-                        positions={[
-                          [trailPoints[i-1].lat, trailPoints[i-1].long],
-                          [p.lat, p.long]
-                        ]}
-                        pathOptions={{
-                          color: getTempColor(p.temp),
-                          weight: activeDatasetId === d.id ? 5 : 3,
-                          opacity: activeDatasetId === d.id ? 0.9 : 0.6,
-                          lineCap: 'round'
-                        }}
-                      />
-                    ) : null;
-
-                    return (
-                      <React.Fragment key={`point-${d.id}-${i}`}>
-                        {line}
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
+              {trailSegments.map((segment, i) => (
+                <Polyline
+                  key={`segment-${d.id}-${i}`}
+                  positions={segment.positions}
+                  pathOptions={{
+                    color: segment.color,
+                    weight: activeDatasetId === d.id ? 5 : 3,
+                    opacity: activeDatasetId === d.id ? 0.9 : 0.6,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                  }}
+                />
+              ))}
 
               {/* Current Position Marker */}
               <CircleMarker
