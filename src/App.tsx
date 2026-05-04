@@ -933,10 +933,7 @@ export default function App() {
           </div>
 
           <section>
-            <h2 className={cn(
-              "text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2",
-              isDarkMode ? "text-slate-400" : "text-slate-500"
-            )}>
+            <h2 className="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2 text-muted-foreground">
               <FileText className="w-3.5 h-3.5" />
               Vehicles ({datasets.length})
             </h2>
@@ -947,8 +944,8 @@ export default function App() {
                   className={cn(
                     "flex items-center gap-2 p-2 rounded-lg border transition-all cursor-pointer",
                     activeDatasetId === d.id 
-                      ? (isDarkMode ? "bg-slate-800 border-slate-700" : "bg-white border-blue-200 shadow-sm ring-1 ring-blue-100")
-                      : (isDarkMode ? "bg-slate-950/30 border-slate-800 hover:border-slate-700" : "bg-slate-50 border-transparent hover:border-slate-200")
+                      ? "bg-accent border-primary/20 shadow-sm ring-1 ring-primary/10"
+                      : "bg-muted/30 border-transparent hover:border-border"
                   )}
                   onClick={() => setActiveDatasetId(activeDatasetId === d.id ? null : d.id)}
                 >
@@ -967,37 +964,37 @@ export default function App() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="w-6 h-6 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                        className="w-6 h-6 rounded-md hover:bg-accent transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(d.url!);
                         }}
                         title="Copy Gist URL"
                       >
-                        <Copy className="w-3 h-3 text-slate-400" />
+                        <Copy className="w-3 h-3 text-muted-foreground" />
                       </Button>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-6 h-6 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                      className="w-6 h-6 rounded-md hover:bg-accent transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleDatasetVisibility(d.id);
                       }}
                     >
-                      {d.visible ? <Eye className="w-3 h-3 text-blue-500" /> : <EyeOff className="w-3 h-3 text-slate-400" />}
+                      {d.visible ? <Eye className="w-3 h-3 text-primary" /> : <EyeOff className="w-3 h-3 text-muted-foreground" />}
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-6 h-6 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500"
+                      className="w-6 h-6 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeDataset(d.id);
                       }}
                     >
-                      <span className="text-xs">×</span>
+                      <span className="text-xs font-bold">×</span>
                     </Button>
                   </div>
                 </div>
@@ -1212,21 +1209,21 @@ export default function App() {
         {/* Map Area */}
         <section className={cn(
           "flex-1 relative p-4",
-          isDarkMode ? "bg-slate-950" : "bg-slate-100"
+          "bg-muted/30"
         )}>
           {error && (
-            <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[2000] bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+            <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[2000] bg-destructive text-destructive-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 border border-white/10 animate-in fade-in slide-in-from-top-4 duration-300">
               <Info className="w-4 h-4" />
               <span className="text-sm font-medium">{error}</span>
-              <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 p-0 hover:bg-red-100">×</Button>
+              <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 p-0 hover:bg-white/20 text-white">×</Button>
             </div>
           )}
 
           {isLoading && (
-            <div className="absolute inset-0 z-[2000] bg-white/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="absolute inset-0 z-[2000] bg-background/60 backdrop-blur-sm flex items-center justify-center">
               <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
-                <p className="text-sm font-bold text-slate-900">Processing Data...</p>
+                <div className="w-12 h-12 border-4 border-muted border-t-primary rounded-full animate-spin" />
+                <p className="text-sm font-bold text-foreground">Processing Data...</p>
               </div>
             </div>
           )}
@@ -1314,21 +1311,21 @@ export default function App() {
                 <div className="flex flex-col gap-2 md:gap-4">
                   <div className="flex justify-between items-center px-1 md:px-2">
                     <div className="flex flex-col">
-                      <span className="text-[8px] md:text-[10px] uppercase tracking-widest font-bold text-slate-400">Timeline Scope</span>
+                      <span className="text-[8px] md:text-[9px] uppercase tracking-widest font-bold text-muted-foreground mb-1 leading-none">Timeline Scope</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <span className="text-[10px] font-bold text-foreground opacity-70">
                           {formatInTimeZone(new Date(timeRange.min), TIMEZONE, 'dd/MM HH:mm')}
                         </span>
-                        <div className="h-0.5 w-4 bg-slate-200 dark:bg-slate-800 rounded" />
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <div className="h-[1px] w-4 bg-border" />
+                        <span className="text-[10px] font-bold text-foreground opacity-70">
                           {formatInTimeZone(new Date(timeRange.max), TIMEZONE, 'dd/MM HH:mm')}
                         </span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[8px] md:text-[10px] uppercase tracking-widest font-bold text-slate-400">Sync Status</span>
-                      <Badge variant="outline" className="text-[9px] border-green-500 text-green-500 bg-green-500/5">
-                        {datasets.length} Vehicles Selected
+                      <span className="text-[8px] md:text-[9px] uppercase tracking-widest font-bold text-muted-foreground mb-1 leading-none">Active Fleet</span>
+                      <Badge variant="outline" className="text-[9px] border-primary/20 bg-primary/5 text-primary">
+                        {datasets.length} Vehicles Displayed
                       </Badge>
                     </div>
                   </div>
@@ -1340,10 +1337,7 @@ export default function App() {
                         size="icon"
                         onClick={goToPrevGlobalHeatEvent}
                         disabled={datasets.length === 0}
-                        className={cn(
-                          "rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0",
-                          isDarkMode ? "border-slate-700 hover:bg-slate-800" : "border-slate-200"
-                        )}
+                        className="rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0 border-border hover:bg-muted"
                         title="Prev Global Heat Event"
                       >
                         <SkipBack className="w-3 h-3 md:w-4 md:h-4" />
@@ -1354,10 +1348,7 @@ export default function App() {
                         size="icon"
                         onClick={stepBackward}
                         disabled={datasets.length === 0}
-                        className={cn(
-                          "rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0",
-                          isDarkMode ? "border-slate-700 hover:bg-slate-800" : "border-slate-200"
-                        )}
+                        className="rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0 border-border hover:bg-muted"
                         title="Step Backward"
                       >
                         <ChevronLeft className="w-3 h-3 md:w-4 md:h-4" />
@@ -1368,10 +1359,7 @@ export default function App() {
                         size="icon"
                         onClick={resetPlayback}
                         disabled={datasets.length === 0}
-                        className={cn(
-                          "rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0",
-                          isDarkMode ? "border-slate-700 hover:bg-slate-800" : "border-slate-200"
-                        )}
+                        className="rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0 border-border hover:bg-muted"
                         title="Reset"
                       >
                         <RotateCcw className="w-3 h-3 md:w-4 md:h-4" />
@@ -1381,8 +1369,8 @@ export default function App() {
                         size="icon"
                         variant={isPlaying ? "outline" : "default"}
                         className={cn(
-                          "w-8 h-8 md:w-12 md:h-12 rounded-full shadow-md transition-all shrink-0 scale-110 md:scale-100",
-                          !isPlaying ? 'bg-red-500 hover:bg-red-600 text-white' : (isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200')
+                          "w-8 h-8 md:w-12 md:h-12 rounded-full shadow-lg transition-all shrink-0 scale-110 md:scale-110",
+                          !isPlaying ? 'bg-primary text-primary-foreground hover:opacity-90' : 'border-border hover:bg-muted'
                         )}
                         onClick={() => setIsPlaying(!isPlaying)}
                         disabled={datasets.length === 0}
@@ -1396,10 +1384,7 @@ export default function App() {
                         size="icon"
                         onClick={stepForward}
                         disabled={datasets.length === 0}
-                        className={cn(
-                          "rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0",
-                          isDarkMode ? "border-slate-700 hover:bg-slate-800" : "border-slate-200"
-                        )}
+                        className="rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0 border-border hover:bg-muted"
                         title="Step Forward"
                       >
                         <ChevronRight className="w-3 h-3 md:w-4 md:h-4" />
@@ -1410,10 +1395,7 @@ export default function App() {
                         size="icon"
                         onClick={goToNextGlobalHeatEvent}
                         disabled={datasets.length === 0}
-                        className={cn(
-                          "rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0",
-                          isDarkMode ? "border-slate-700 hover:bg-slate-800" : "border-slate-200"
-                        )}
+                        className="rounded-full w-7 h-7 md:w-10 md:h-10 shrink-0 border-border hover:bg-muted"
                         title="Next Global Heat Event"
                       >
                         <SkipForward className="w-3 h-3 md:w-4 md:h-4" />
@@ -1444,32 +1426,26 @@ export default function App() {
               </div>
             </>
           ) : (
-            <div className={cn(
-              "w-full h-full flex items-center justify-center rounded-xl border",
-              isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
-            )}>
-              <div className="max-w-md text-center">
-                <div className={cn(
-                  "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6",
-                  isDarkMode ? "bg-slate-800" : "bg-slate-50"
-                )}>
-                  <MapIcon className="w-10 h-10 text-slate-200" />
+            <div className="w-full h-full flex items-center justify-center rounded-xl border bg-card border-border shadow-inner">
+              <div className="max-w-md text-center p-8">
+                <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 bg-muted rotate-3 shadow-lg">
+                  <MapIcon className="w-10 h-10 text-muted-foreground" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Ready to Visualize</h2>
-                <p className="text-slate-500 mb-8">
-                  Upload your GPS and temperature data (.csv or .xlsx) to see an animated route analysis with historical trails.
+                <h2 className="text-2xl font-bold mb-2 text-foreground">Ready to Visualize</h2>
+                <p className="text-muted-foreground mb-8 text-sm">
+                  Upload your GPS and temperature data (.csv or .xlsx) or link from GitHub Gists to see an animated route analysis with historical trails.
                 </p>
-                <div className="flex flex-col gap-3 items-center">
+                <div className="flex flex-col gap-4 items-center">
                   <label 
                     htmlFor="file-upload" 
                     className={cn(
                       buttonVariants({ size: "lg" }), 
-                      "px-8 bg-slate-900 cursor-pointer text-white"
+                      "px-10 bg-primary cursor-pointer text-primary-foreground shadow-xl shadow-primary/20 hover:scale-105 transition-all"
                     )}
                   >
-                    Select File
+                    Select Local File
                   </label>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Supported: CSV, Excel</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Supported: CSV, Excel, Gist</p>
                 </div>
               </div>
             </div>
