@@ -46,7 +46,15 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
               'M/d/yyyy h:mm:ss a',
               'M/d/yyyy HH:mm:ss',
               'MM/dd/yyyy hh:mm:ss a',
-              'MM/dd/yyyy h:mm:ss a'
+              'MM/dd/yyyy h:mm:ss a',
+              'd/M/yyyy hh:mm:ss a',
+              'd/M/yyyy h:mm:ss a',
+              'dd/MM/yyyy hh:mm:ss a',
+              'dd/MM/yyyy h:mm:ss a',
+              'yyyy-MM-dd HH:mm:ss',
+              'dd-MM-yyyy HH:mm:ss',
+              'M/d/yy HH:mm:ss',
+              'd/M/yy HH:mm:ss'
             ];
             
             for (const fmt of formats) {
@@ -162,7 +170,6 @@ export const fetchGistData = async (url: string): Promise<{ data: any[], title: 
     parse(text, {
       header: true,
       skipEmptyLines: true,
-      delimiter: '\t', // Force tab for this request as per user info
       complete: (results) => resolve({ data: results.data, title }),
       error: (err) => reject(err)
     });

@@ -650,6 +650,11 @@ export default function App() {
               locationCol,
               url
             });
+          } else if (cleaned.length > 0) {
+            const first = cleaned[0].time;
+            const last = cleaned[cleaned.length - 1].time;
+            const rangeStr = `${formatInTimeZone(first, TIMEZONE, 'dd/MM HH:mm')} - ${formatInTimeZone(last, TIMEZONE, 'dd/MM HH:mm')}`;
+            throw new Error(`Data found but outside required range (20-27 Mar 2026). Found: ${rangeStr}`);
           }
         } catch (err) {
           console.error(`Failed to load gist from ${url}:`, err);
@@ -772,12 +777,12 @@ export default function App() {
   return (
     <div className={cn(
       "flex flex-col h-screen font-sans overflow-hidden",
-      isDarkMode ? "bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900"
+      isDarkMode ? "bg-background text-foreground" : "bg-slate-50 text-slate-900"
     )}>
       {/* Header */}
       <header className={cn(
         "h-16 border-b flex items-center px-4 md:px-6 justify-between shrink-0 z-50",
-        isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+        "bg-card border-border"
       )}>
         <div className="flex items-center gap-2 md:gap-3">
           <Button
@@ -828,7 +833,7 @@ export default function App() {
               disabled={isSharing}
               className={cn(
                 "flex items-center gap-2 transition-all h-8 md:h-9 px-2 md:px-3",
-                shareSuccess ? "bg-green-500 hover:bg-green-600 border-green-500 text-white" : (isDarkMode ? "border-slate-700 text-slate-300" : "border-slate-200")
+                shareSuccess ? "bg-green-500 hover:bg-green-600 border-green-500 text-white" : "border-border text-foreground hover:bg-accent"
               )}
             >
               {shareSuccess ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
@@ -848,9 +853,9 @@ export default function App() {
             <label 
               htmlFor="file-upload" 
               className={cn(
-                buttonVariants({ variant: isDarkMode ? "outline" : "default", size: "sm" }), 
-                "flex items-center gap-2 cursor-pointer transition-all active:scale-95 h-8 md:h-9 px-2 md:px-3",
-                isDarkMode ? "border-slate-700 text-slate-200 hover:bg-slate-800" : "bg-slate-900 text-white hover:bg-slate-800"
+                buttonVariants({ variant: "default", size: "sm" }), 
+                "flex items-center gap-2 cursor-pointer transition-all active:scale-95 h-8 md:h-9 px-2 md:px-3 shadow-sm",
+                "bg-primary text-primary-foreground hover:opacity-90"
               )}
             >
               <Upload className="w-4 h-4" />
@@ -872,8 +877,8 @@ export default function App() {
         {/* Sidebar Controls */}
         <aside className={cn(
           "h-full border-r overflow-y-auto flex flex-col gap-6 shrink-0 transition-all duration-300 ease-in-out",
-          isPinned ? "relative z-20" : "absolute z-[1600] shadow-2xl",
-          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200",
+          isPinned ? "relative z-20" : "absolute z-[1600] shadow-[0_0_50px_rgba(0,0,0,0.1)] dark:shadow-black",
+          "bg-card border-border",
           isSidebarOpen 
             ? "w-72 md:w-80 p-6 translate-x-0 opacity-100" 
             : "w-0 p-0 border-none -translate-x-full opacity-0 overflow-hidden"
@@ -908,19 +913,15 @@ export default function App() {
                 value={gistUrlInput}
                 onChange={(e) => setGistUrlInput(e.target.value)}
                 className={cn(
-                  "text-[10px] min-h-[80px] w-full p-2 rounded-md border transition-all focus:ring-2 focus:ring-blue-500/20 resize-none",
-                  isDarkMode 
-                    ? "bg-slate-950/50 border-slate-800 focus:border-blue-500/50 text-slate-300 placeholder:text-slate-600" 
-                    : "bg-slate-50 border-slate-200 focus:border-blue-400 text-slate-700 placeholder:text-slate-400"
+                  "text-[10px] min-h-[80px] w-full p-2 rounded-md border transition-all focus:ring-2 focus:ring-ring/20 resize-none",
+                  "bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
                 )}
               />
               <Button
                 variant="outline"
                 className={cn(
                   "h-9 w-full flex items-center justify-center gap-2 border-dashed transition-all hover:scale-[0.98] active:scale-95",
-                  isDarkMode 
-                    ? "border-slate-800 bg-slate-950/20 text-slate-400 hover:bg-slate-800 hover:text-slate-200" 
-                    : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                  "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
                 onClick={loadFromGist}
                 disabled={!gistUrlInput || isLoading}
@@ -956,9 +957,9 @@ export default function App() {
                     style={{ backgroundColor: d.color }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold truncate leading-tight">{d.name}</p>
-                    <p className="text-[9px] text-slate-500 font-medium">
-                      {d.data.length} pts • {currentPoints[d.id]?.temp.toFixed(1) || '--'}°C
+                    <p className="text-[11px] font-bold truncate leading-tight text-foreground">{d.name.split('.')[0]}</p>
+                    <p className="text-[9px] text-muted-foreground font-medium">
+                      {d.data.length} pts • {currentPoints[d.id]?.temp.toFixed(1) || '--'}°
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -1185,18 +1186,18 @@ export default function App() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-50 dark:border-slate-800/50">
-                          <div className="flex flex-col items-center p-1 rounded bg-slate-50 dark:bg-slate-900/50">
-                            <span className="text-[8px] text-slate-400 uppercase">Min</span>
-                            <span className="font-bold text-blue-500">{event.minTemp.toFixed(1)}°</span>
+                        <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border">
+                          <div className="flex flex-col items-center p-1 rounded bg-muted/30">
+                            <span className="text-[8px] text-muted-foreground uppercase font-bold">Min</span>
+                            <span className="font-bold text-blue-500 text-[10px]">{event.minTemp.toFixed(1)}°</span>
                           </div>
-                          <div className="flex flex-col items-center p-1 rounded bg-orange-50 dark:bg-orange-900/20">
-                            <span className="text-[8px] text-slate-400 uppercase">Max</span>
-                            <span className="font-bold text-red-500">{event.maxTemp.toFixed(1)}°</span>
+                          <div className="flex flex-col items-center p-1 rounded bg-destructive/10">
+                            <span className="text-[8px] text-destructive uppercase font-bold">Max</span>
+                            <span className="font-bold text-destructive text-[10px]">{event.maxTemp.toFixed(1)}°</span>
                           </div>
-                          <div className="flex flex-col items-center p-1 rounded bg-slate-50 dark:bg-slate-900/50">
-                            <span className="text-[8px] text-slate-400 uppercase">Avg</span>
-                            <span className="font-bold text-slate-600 dark:text-slate-300">{event.avgTemp.toFixed(1)}°</span>
+                          <div className="flex flex-col items-center p-1 rounded bg-muted/30">
+                            <span className="text-[8px] text-muted-foreground uppercase font-bold">Avg</span>
+                            <span className="font-bold text-foreground text-[10px]">{event.avgTemp.toFixed(1)}°</span>
                           </div>
                         </div>
                       </button>
@@ -1234,27 +1235,27 @@ export default function App() {
             <>
               {/* Current Status Bar (Summary of all vehicles) */}
               <div className={cn(
-                "absolute top-4 left-16 z-[1000] backdrop-blur-md rounded-2xl border shadow-2xl flex flex-col p-4 gap-3 transition-all duration-300 max-w-[200px] w-auto",
-                isDarkMode ? "bg-slate-900/95 border-slate-800 shadow-slate-950/50" : "bg-white/95 border-blue-100 shadow-blue-900/10"
+                "absolute top-4 left-16 z-[1000] backdrop-blur-md rounded-2xl border shadow-xl flex flex-col p-4 gap-3 transition-all duration-300 max-w-[220px] w-auto",
+                "bg-card/90 border-border"
               )}>
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-blue-500 mb-1 tracking-wider">Playback Time</span>
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground mb-1 tracking-widest pl-1 border-l-2 border-primary">Playback Time</span>
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-400" />
-                      <span className="text-2xl font-mono font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-2xl font-mono font-bold tracking-tight text-foreground whitespace-nowrap leading-none">
                         {formatInTimeZone(new Date(currentPlayTime), TIMEZONE, 'HH:mm:ss')}
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col border-t border-slate-100 dark:border-slate-800 pt-2">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 mb-0.5 tracking-wider">Date</span>
-                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                      {formatInTimeZone(new Date(currentPlayTime), TIMEZONE, 'dd/MM/yyyy')}
+                  <div className="flex flex-col border-t border-border pt-2">
+                    <span className="text-[8px] uppercase font-bold text-muted-foreground mb-0.5 tracking-wider">Date</span>
+                    <span className="text-[10px] font-bold text-foreground">
+                      {formatInTimeZone(new Date(currentPlayTime), TIMEZONE, 'dd MMM yyyy')}
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-2">
+                  <div className="space-y-1.5 border-t border-border pt-2 max-h-[200px] overflow-y-auto custom-scrollbar">
                     {datasets.filter(d => d.visible).map(d => {
                       const point = currentPoints[d.id];
                       if (!point) return null;
@@ -1263,24 +1264,24 @@ export default function App() {
                       return (
                         <div 
                           key={`status-${d.id}`} 
-                          className="flex items-center justify-between gap-3"
+                          className="flex items-center justify-between gap-3 p-1 rounded hover:bg-muted/50 transition-colors"
                         >
                           <div className="flex items-center gap-2 truncate">
                             <div 
-                              className="w-1.5 h-1.5 rounded-full shrink-0 shadow-sm" 
+                              className="w-2 h-2 rounded-full shrink-0 shadow-sm border border-white/20" 
                               style={{ backgroundColor: d.color }}
                             />
-                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">
-                              {d.name}
+                            <span className="text-[10px] font-bold text-foreground truncate max-w-[100px]">
+                              {d.name.split('.')[0]}
                             </span>
                           </div>
                           <span className={cn(
-                            "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded",
+                            "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded transition-colors",
                             isHighTemp 
-                              ? "text-red-500 bg-red-50 dark:bg-red-950/30 ring-1 ring-red-200 dark:ring-red-900" 
-                              : "text-slate-500 bg-slate-50 dark:bg-slate-800"
+                              ? "text-white bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]" 
+                              : "text-muted-foreground bg-muted"
                           )}>
-                            {point.temp.toFixed(1)}°C
+                            {point.temp.toFixed(1)}°
                           </span>
                         </div>
                       );
@@ -1307,8 +1308,8 @@ export default function App() {
               
               {/* Timeline Slider Overlay */}
               <div className={cn(
-                "absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 w-[90%] md:w-[70%] z-[1000] backdrop-blur-md p-4 md:p-6 rounded-xl md:rounded-2xl border shadow-2xl",
-                isDarkMode ? "bg-slate-900/95 border-slate-800" : "bg-white/95 border-slate-200"
+                "absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 w-[90%] md:w-[70%] z-[1000] backdrop-blur-md p-4 md:p-6 rounded-2xl border shadow-2xl",
+                "bg-card/90 border-border"
               )}>
                 <div className="flex flex-col gap-2 md:gap-4">
                   <div className="flex justify-between items-center px-1 md:px-2">

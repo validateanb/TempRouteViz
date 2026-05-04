@@ -29,13 +29,13 @@ function Slider({
       {...props}
     >
       <SliderPrimitive.Control className="relative flex w-full grow items-center h-5">
-        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-          <SliderPrimitive.Indicator className="absolute h-full bg-red-500" />
+        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary">
+          <SliderPrimitive.Indicator className="absolute h-full bg-primary" />
         </SliderPrimitive.Track>
         {_values.map((_, index) => (
           <SliderPrimitive.Thumb
             key={index}
-            className="block size-5 rounded-full border-2 border-white dark:border-slate-950 bg-red-500 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-grab active:cursor-grabbing hover:scale-110"
+            className="block size-4.5 rounded-full border border-border bg-background shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
           />
         ))}
       </SliderPrimitive.Control>
