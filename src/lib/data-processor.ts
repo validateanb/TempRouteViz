@@ -7,17 +7,25 @@ import { parse as parseDate } from 'date-fns';
 const TIMEZONE = 'Asia/Bangkok';
 
 export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: string | null } => {
-  const colMap: Record<string, string> = {};
+  const colMap: Record<string, string[]> = {
+    time: [],
+    lat: [],
+    long: [],
+    temp: []
+  };
   if (data.length === 0) return { cleaned: [], locationCol: null };
 
   const originalCols = Object.keys(data[0] || {});
   
   originalCols.forEach(c => {
     const lc = c.toLowerCase();
-    if (lc.includes('time') || lc.includes('date')) colMap['time'] = c;
-    else if (lc.includes('lat')) colMap['lat'] = c;
-    else if (lc.includes('long') || lc.includes('lng')) colMap['long'] = c;
-    else if (lc.includes('temp')) colMap['temp'] = c;
+    // Use arrays to store multiple matches (e.g. "Date" and "Time")
+    if (lc === 'date' || lc === 'time' || lc.includes('time') || lc.includes('date')) {
+      colMap['time'].push(c);
+    }
+    else if (lc.includes('lat')) colMap['lat'].push(c);
+    else if (lc.includes('long') || lc.includes('lng')) colMap['long'].push(c);
+    else if (lc.includes('temp')) colMap['temp'].push(c);
   });
 
   const locationCol = originalCols.find(c => {
@@ -27,40 +35,45 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
 
   const cleaned: GPSData[] = data
     .map(row => {
-      const timeVal = row[colMap['time']];
+      // Combine date/time columns if multiple found
+      let timeStr = colMap['time'].map(c => String(row[c])).join(' ').trim();
       let time: Date | null = null;
       
-      if (timeVal instanceof Date) {
-        const isoStr = timeVal.toISOString().replace('Z', ''); 
-        time = fromZonedTime(isoStr, TIMEZONE);
-      } else if (typeof timeVal === 'string') {
-        const cleanedTimeVal = timeVal.trim();
-        
-        // Handle m/d/yyyy hh:mm:ss AM/PM
-        // Matches m/d/yyyy or m-d-yyyy or m/d/yy with optional time
-        if (cleanedTimeVal.includes('AM') || cleanedTimeVal.includes('PM')) {
-          try {
-            // Try common formats for m/d/yyyy hh:mm:ss a
-            const formats = [
-              'M/d/yyyy hh:mm:ss a',
-              'M/d/yyyy h:mm:ss a',
-              'M/d/yyyy HH:mm:ss',
-              'MM/dd/yyyy hh:mm:ss a',
-              'MM/dd/yyyy h:mm:ss a',
-              'd/M/yyyy hh:mm:ss a',
-              'd/M/yyyy h:mm:ss a',
-              'dd/MM/yyyy hh:mm:ss a',
-              'dd/MM/yyyy h:mm:ss a',
-              'yyyy-MM-dd HH:mm:ss',
-              'dd-MM-yyyy HH:mm:ss',
-              'M/d/yy HH:mm:ss',
-              'd/M/yy HH:mm:ss'
-            ];
-            
-            for (const fmt of formats) {
+      if (timeStr) {
+        // Check if it's already a Date object or numeric timestamp
+        const firstTimeVal = row[colMap['time'][0]];
+        if (firstTimeVal instanceof Date) {
+          const isoStr = firstTimeVal.toISOString().replace('Z', ''); 
+          time = fromZonedTime(isoStr, TIMEZONE);
+        } else if (typeof firstTimeVal === 'number' && firstTimeVal > 40000 && firstTimeVal < 60000) {
+          // Excel date serial
+          const ms = (firstTimeVal - 25569) * 86400 * 1000;
+          const date = new Date(ms);
+          const isoStr = date.toISOString().replace('Z', '');
+          time = fromZonedTime(isoStr, TIMEZONE);
+        } else {
+          // Parse string combinations
+          const cleanedTimeVal = timeStr.replace(/\s+/g, ' ');
+          
+          // Try common formats
+          const formats = [
+            'M/d/yyyy h:mm:ss a',
+            'M/d/yyyy hh:mm:ss a',
+            'M/d/yyyy HH:mm:ss',
+            'd/M/yyyy h:mm:ss a',
+            'd/M/yyyy hh:mm:ss a',
+            'yyyy-MM-dd HH:mm:ss',
+            'dd/MM/yyyy HH:mm:ss',
+            'M/d/yyyy h:mm a',
+            'MM/dd/yyyy HH:mm:ss',
+            'd/M/yy HH:mm:ss',
+            'M/d/yy HH:mm:ss'
+          ];
+          
+          for (const fmt of formats) {
+            try {
               const p = parseDate(cleanedTimeVal, fmt, new Date());
               if (!isNaN(p.getTime())) {
-                // Convert back to string and treat as Bangkok naive
                 const naiveStr = p.getFullYear() + '-' + 
                               String(p.getMonth() + 1).padStart(2, '0') + '-' + 
                               String(p.getDate()).padStart(2, '0') + ' ' + 
@@ -70,42 +83,25 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
                 time = fromZonedTime(naiveStr, TIMEZONE);
                 break;
               }
-            }
-          } catch (e) {
-            console.error("Failed to parse date with format", cleanedTimeVal);
+            } catch (e) {}
           }
-        }
 
-        if (!time) {
-          const parsed = fromZonedTime(cleanedTimeVal, TIMEZONE);
-          if (!isNaN(parsed.getTime())) {
-            time = parsed;
-          } else {
-            const timeMatch = cleanedTimeVal.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
-            if (timeMatch) {
-              const now = new Date();
-              const hours = parseInt(timeMatch[1]);
-              const minutes = parseInt(timeMatch[2]);
-              const seconds = timeMatch[3] ? parseInt(timeMatch[3]) : 0;
-              const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-              time = fromZonedTime(dateStr, TIMEZONE);
+          if (!time) {
+            const parsed = fromZonedTime(cleanedTimeVal, TIMEZONE);
+            if (!isNaN(parsed.getTime())) {
+              time = parsed;
             }
           }
-        }
-      } else if (typeof timeVal === 'number') {
-        if (timeVal > 40000 && timeVal < 60000) {
-          const ms = (timeVal - 25569) * 86400 * 1000;
-          const date = new Date(ms);
-          const isoStr = date.toISOString().replace('Z', '');
-          time = fromZonedTime(isoStr, TIMEZONE);
-        } else {
-          time = new Date(timeVal);
         }
       }
 
-      const lat = parseFloat(String(row[colMap['lat']]).replace(/,/g, ''));
-      const long = parseFloat(String(row[colMap['long']]).replace(/,/g, ''));
-      const temp = parseFloat(String(row[colMap['temp']]).replace(/,/g, ''));
+      const latCol = colMap['lat'][0];
+      const longCol = colMap['long'][0];
+      const tempCol = colMap['temp'][0];
+
+      const lat = latCol ? parseFloat(String(row[latCol]).replace(/,/g, '')) : NaN;
+      const long = longCol ? parseFloat(String(row[longCol]).replace(/,/g, '')) : NaN;
+      const temp = tempCol ? parseFloat(String(row[tempCol]).replace(/,/g, '')) : NaN;
       const location = locationCol ? row[locationCol] : undefined;
 
       return { time: time || new Date(0), lat, long, temp, location };
@@ -170,6 +166,7 @@ export const fetchGistData = async (url: string): Promise<{ data: any[], title: 
     parse(text, {
       header: true,
       skipEmptyLines: true,
+      delimiter: "", // Auto-detect
       complete: (results) => resolve({ data: results.data, title }),
       error: (err) => reject(err)
     });

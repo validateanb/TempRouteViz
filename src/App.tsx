@@ -317,6 +317,15 @@ export default function App() {
     }
   }, [isDarkMode]);
 
+  const [fleetWarnings, setFleetWarnings] = useState<{url: string, message: string, title?: string}[]>([]);
+
+  // Update effect to clear warnings on major changes
+  useEffect(() => {
+    if (datasets.length > 0) {
+      // Keep warnings but maybe clear if successful reload
+    }
+  }, [datasets]);
+
   // Load shared data from URL
   useEffect(() => {
     const loadFromUrl = async () => {
@@ -325,6 +334,8 @@ export default function App() {
       let encodedName = null;
       let gistUrls: string[] = [];
       let shortGistIds: string[] = [];
+
+      setFleetWarnings([]); // Clear previous warnings
 
       if (window.location.hash) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -340,26 +351,32 @@ export default function App() {
         shortGistIds = queryParams.getAll('gi');
       }
 
-      // Reconstruct full URLs from shortened IDs
-      const allGists = [...gistUrls];
+      // Reconstruction: handle both gi (short/full path) and g (full URL)
+      const allGistUrls = [...gistUrls];
       shortGistIds.forEach(id => {
-        allGists.push(`https://gist.github.com/${id}`);
+        // If it was stored as 'username/id', we use it. If only 'id', it still works.
+        if (id.startsWith('http')) {
+          allGistUrls.push(id);
+        } else {
+          allGistUrls.push(`https://gist.github.com/${id}`);
+        }
       });
 
       const loadedDatasets: Dataset[] = [];
+      const newWarnings: typeof fleetWarnings = [];
 
       // Priority: Gist URLs if present
-      if (allGists.length > 0) {
+      if (allGistUrls.length > 0) {
         setIsLoading(true);
-        try {
-          for (const url of allGists) {
+        for (const url of allGistUrls) {
+          try {
             const result = await fetchGistData(url);
             const { cleaned, locationCol } = cleanGPSData(result.data);
             
             if (cleaned.length > 0) {
               // Apply standard time filtering
               const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
-              const filterEnd = fromZonedTime('2026-03-27 20:00:00', TIMEZONE);
+              const filterEnd = fromZonedTime('2026-03-28 23:59:59', TIMEZONE);
 
               const filtered = cleaned.filter(point => {
                 const t = point.time.getTime();
@@ -368,7 +385,7 @@ export default function App() {
 
               if (filtered.length > 0) {
                 loadedDatasets.push({
-                  id: `gist-${Date.now()}-${loadedDatasets.length}`,
+                  id: `gist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                   name: result.title || `Gist Route`,
                   data: filtered,
                   color: COLORS[loadedDatasets.length % COLORS.length],
@@ -376,15 +393,34 @@ export default function App() {
                   locationCol,
                   url
                 });
+              } else {
+                const first = cleaned[0].time;
+                const last = cleaned[cleaned.length - 1].time;
+                const rangeStr = `${formatInTimeZone(first, TIMEZONE, 'dd/MM HH:mm')} - ${formatInTimeZone(last, TIMEZONE, 'dd/MM HH:mm')}`;
+                newWarnings.push({
+                  url,
+                  title: result.title,
+                  message: `Data found (${rangeStr}) but falls outside strict fleet window (20-28 Mar).`
+                });
+                console.warn(`Gist ${url} loaded but contained no data in range 2026-03-20 to 2026-03-28`);
               }
+            } else {
+              newWarnings.push({
+                url,
+                title: result.title,
+                message: "Format error: No valid GPS coordinates or timestamps found in file."
+              });
             }
+          } catch (err) {
+            console.error(`Failed to load Gist from URL: ${url}`, err);
+            newWarnings.push({
+              url,
+              message: "Network error: Failed to connect or fetch data."
+            });
           }
-        } catch (err) {
-          console.error("Failed to load Gist from URL", err);
-          setError("Failed to load Gist from link.");
-        } finally {
-          setIsLoading(false);
         }
+        setFleetWarnings(newWarnings);
+        setIsLoading(false);
       } 
       
       // Fallback or addition: Compressed data
@@ -482,12 +518,17 @@ export default function App() {
       const gistIds: string[] = [];
       datasets.forEach((d) => {
         if (d.url) {
-          // Extract ID from Gist URL: https://gist.github.com/user/ID
-          const matches = d.url.match(/gist\.github\.com\/([^\/]+\/[a-f0-9]+)/i);
-          if (matches && matches[1]) {
-            gistIds.push(matches[1]);
+          // Extract ID or username/ID from Gist URL
+          // Matches gist.github.com/ID or gist.github.com/user/ID
+          const matches = d.url.match(/gist\.github\.com\/(?:[^\/]+\/)?([a-f0-9]+)/i);
+          const fullPathMatch = d.url.match(/gist\.github\.com\/([^\/]+\/[a-f0-9]+)/i);
+          
+          if (fullPathMatch && fullPathMatch[1]) {
+            gistIds.push(fullPathMatch[1]); // e.g. "user/id"
+          } else if (matches && matches[1]) {
+            gistIds.push(matches[1]); // e.g. "id"
           } else {
-            hashParams.append('g', d.url); // Fallback to full URL
+            hashParams.append('g', d.url); // Fallback
           }
         }
       });
@@ -636,24 +677,39 @@ export default function App() {
 
     setIsLoading(true);
     setError(null);
+    const newWarnings: typeof fleetWarnings = [];
 
     try {
       const newDatasetsFromGist: Dataset[] = [];
       const currentDatasetCount = datasets.length;
+      let loadedCount = 0;
+      let filterCount = 0;
 
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
         if (currentDatasetCount + newDatasetsFromGist.length >= 20) break;
 
+        // Skip if already loaded
+        if (datasets.some(d => d.url === url)) {
+          continue;
+        }
+
         try {
           const result = await fetchGistData(url);
           let { cleaned, locationCol } = cleanGPSData(result.data);
 
-          if (cleaned.length === 0) continue;
+          if (cleaned.length === 0) {
+            newWarnings.push({
+              url,
+              title: result.title,
+              message: "Format error: No valid GPS data columns found."
+            });
+            continue;
+          }
 
           // User's specific time range requirement:
           const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
-          const filterEnd = fromZonedTime('2026-03-27 20:00:00', TIMEZONE);
+          const filterEnd = fromZonedTime('2026-03-28 23:59:59', TIMEZONE);
 
           const filtered = cleaned.filter(point => {
             const t = point.time.getTime();
@@ -662,7 +718,7 @@ export default function App() {
 
           if (filtered.length > 0) {
             newDatasetsFromGist.push({
-              id: `gist-${Date.now()}-${i}`,
+              id: `gist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: result.title || `Gist Route`,
               data: filtered,
               color: COLORS[(currentDatasetCount + newDatasetsFromGist.length) % COLORS.length],
@@ -670,34 +726,54 @@ export default function App() {
               locationCol,
               url
             });
+            loadedCount++;
           } else if (cleaned.length > 0) {
+            filterCount++;
             const first = cleaned[0].time;
             const last = cleaned[cleaned.length - 1].time;
             const rangeStr = `${formatInTimeZone(first, TIMEZONE, 'dd/MM HH:mm')} - ${formatInTimeZone(last, TIMEZONE, 'dd/MM HH:mm')}`;
-            throw new Error(`Data found but outside required range (20-27 Mar 2026). Found: ${rangeStr}`);
+            newWarnings.push({
+              url,
+              title: result.title,
+              message: `Filtered: Data found (${rangeStr}) but outside 20-28 Mar window.`
+            });
+            console.warn(`Gist ${url} found but outside range. Found: ${rangeStr}`);
           }
         } catch (err) {
           console.error(`Failed to load gist from ${url}:`, err);
+          newWarnings.push({
+            url,
+            message: "Connection failed: Could not reach Gist server."
+          });
         }
       }
 
-      if (newDatasetsFromGist.length === 0) {
-        throw new Error("No valid GPS data found in any of the provided Gists within the required date range.");
-      }
+      setFleetWarnings(prev => [...prev.filter(pw => !urls.includes(pw.url)), ...newWarnings]);
 
-      const updatedDatasets = [...datasets, ...newDatasetsFromGist];
-      setDatasets(updatedDatasets);
-      
-      // Set the first newly loaded dataset as active
-      setActiveDatasetId(newDatasetsFromGist[0].id);
-      
-      if (datasets.length === 0) {
-        setCurrentPlayTime(newDatasetsFromGist[0].data[0].time.getTime());
+      if (newDatasetsFromGist.length > 0) {
+        const updatedDatasets = [...datasets, ...newDatasetsFromGist];
+        setDatasets(updatedDatasets);
+        setActiveDatasetId(newDatasetsFromGist[0].id);
+        
+        if (datasets.length === 0) {
+          setCurrentPlayTime(newDatasetsFromGist[0].data[0].time.getTime());
+        }
+        
+        setIsPlaying(true);
+        setGistUrlInput("");
+
+        // If some failed, notify
+        if (newWarnings.length > 0) {
+          setError(`Loaded ${loadedCount} vehicles. Check "Fleet Issues" below for details.`);
+          setTimeout(() => setError(null), 5000);
+        }
+      } else {
+        if (filterCount > 0) {
+          throw new Error(`Data found but all records were outside 20-28 Mar 2026 range.`);
+        } else {
+          throw new Error("No valid GPS data found in the provided Gists.");
+        }
       }
-      
-      setIsPlaying(true);
-      // Clear input on success
-      setGistUrlInput("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Gists");
     } finally {
@@ -1010,7 +1086,39 @@ export default function App() {
                   </div>
                 </div>
               ))}
-              {datasets.length === 0 && (
+
+              {fleetWarnings.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-primary">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Fleet Issues
+                    </h2>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-5 px-1.5 text-[8px] uppercase font-bold"
+                      onClick={() => setFleetWarnings([])}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {fleetWarnings.map((w, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-destructive/5 border border-destructive/10">
+                        <p className="text-[10px] font-bold text-destructive uppercase tracking-tight truncate">
+                          {w.title?.split('.')[0] || 'Unknown Vehicle'}
+                        </p>
+                        <p className="text-[9px] text-muted-foreground leading-tight mt-0.5 font-medium">
+                          {w.message}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {datasets.length === 0 && fleetWarnings.length === 0 && (
                   <div className="text-center py-8 px-4 border border-dashed border-border bg-muted/20 rounded-xl">
                     <Upload className="w-5 h-5 text-muted-foreground/30 mx-auto mb-2" />
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">No vehicles added</p>
