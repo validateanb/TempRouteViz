@@ -32,6 +32,7 @@ import {
   FileText,
   Share2,
   Link as LinkIcon,
+  Copy,
   Check,
   Pin,
   Download,
@@ -318,22 +319,67 @@ export default function App() {
 
   // Load shared data from URL
   useEffect(() => {
-    const loadFromUrl = () => {
+    const loadFromUrl = async () => {
       // Try hash first (supports larger data), then fallback to query params for backward compatibility
       let encodedData = null;
       let encodedName = null;
+      let gistUrls: string[] = [];
 
-      if (window.location.hash && window.location.hash.startsWith('#d=')) {
+      if (window.location.hash) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         encodedData = hashParams.get('d');
         encodedName = hashParams.get('n');
+        gistUrls = hashParams.getAll('g');
       } else {
         const queryParams = new URLSearchParams(window.location.search);
         encodedData = queryParams.get('d');
         encodedName = queryParams.get('n');
+        gistUrls = queryParams.getAll('g');
       }
+
+      const loadedDatasets: Dataset[] = [];
+
+      // Priority: Gist URLs if present
+      if (gistUrls.length > 0) {
+        setIsLoading(true);
+        try {
+          for (const url of gistUrls) {
+            const result = await fetchGistData(url);
+            const { cleaned, locationCol } = cleanGPSData(result.data);
+            
+            if (cleaned.length > 0) {
+              // Apply standard time filtering
+              const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
+              const filterEnd = fromZonedTime('2026-03-27 20:00:00', TIMEZONE);
+
+              const filtered = cleaned.filter(point => {
+                const t = point.time.getTime();
+                return t >= filterStart.getTime() && t <= filterEnd.getTime();
+              });
+
+              if (filtered.length > 0) {
+                loadedDatasets.push({
+                  id: `gist-${Date.now()}-${loadedDatasets.length}`,
+                  name: result.title || `Gist Route`,
+                  data: filtered,
+                  color: COLORS[loadedDatasets.length % COLORS.length],
+                  visible: true,
+                  locationCol,
+                  url
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load Gist from URL", err);
+          setError("Failed to load Gist from link.");
+        } finally {
+          setIsLoading(false);
+        }
+      } 
       
-      if (encodedData) {
+      // Fallback or addition: Compressed data
+      if (encodedData && loadedDatasets.length === 0) {
         try {
           const decompressed = LZString.decompressFromEncodedURIComponent(encodedData);
           if (decompressed) {
@@ -366,7 +412,6 @@ export default function App() {
                 };
               });
               
-              // Add the base point at the beginning
               restored.unshift({
                 lat: bLat / 1e6,
                 long: bLong / 1e6,
@@ -375,38 +420,24 @@ export default function App() {
                 location: locations[parsed.bli] || ""
               });
             } else {
-              // Handle Version 1 and Legacy formats
-              restored = parsed.map((p: any) => {
-                // Handle shortened keys (a: lat, o: long, t: temp, m: time, l: location)
-                const lat = p.a !== undefined ? p.a : p.lat;
-                const long = p.o !== undefined ? p.o : p.long;
-                const temp = p.t !== undefined ? p.t : p.temp;
-                const time = p.m !== undefined ? new Date(p.m) : new Date(p.time);
-                const location = p.l !== undefined ? p.l : p.location;
-
-                return {
-                  lat,
-                  long,
-                  temp,
-                  time,
-                  location
-                };
-              });
+              restored = parsed.map((p: any) => ({
+                lat: p.a !== undefined ? p.a : p.lat,
+                long: p.o !== undefined ? p.o : p.long,
+                temp: p.t !== undefined ? p.t : p.temp,
+                time: p.m !== undefined ? new Date(p.m) : new Date(p.time),
+                location: p.l !== undefined ? p.l : p.location
+              }));
             }
 
             if (restored.length > 0) {
-              const newDataset: Dataset = {
+              loadedDatasets.push({
                 id: `shared-${Date.now()}`,
                 name: (encodedName ? decodeURIComponent(encodedName) : 'Shared Data'),
                 data: restored,
-                color: COLORS[0],
+                color: COLORS[loadedDatasets.length % COLORS.length],
                 visible: true,
                 locationCol: 'Location'
-              };
-              setDatasets([newDataset]);
-              setActiveDatasetId(newDataset.id);
-              setCurrentPlayTime(restored[0].time.getTime());
-              setIsPlaying(true);
+              });
             }
           }
         } catch (err) {
@@ -414,12 +445,20 @@ export default function App() {
           setError("Failed to load shared data from URL.");
         }
       }
+
+      if (loadedDatasets.length > 0) {
+        setDatasets(loadedDatasets);
+        setActiveDatasetId(loadedDatasets[0].id);
+        setCurrentPlayTime(loadedDatasets[0].data[0].time.getTime());
+        setIsPlaying(true);
+      }
     };
 
     loadFromUrl();
-    // Listen for hash changes if user pastes a new link while app is open
-    window.addEventListener('hashchange', loadFromUrl);
-    return () => window.removeEventListener('hashchange', loadFromUrl);
+    // Listen for hash changes
+    const onHashChange = () => loadFromUrl();
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   const generateShareLink = () => {
@@ -482,8 +521,17 @@ export default function App() {
       const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(compactData));
       const url = new URL(window.location.origin + window.location.pathname);
       const hashParams = new URLSearchParams();
+      
+      // Include active dataset's data for fallback/direct viewing
       hashParams.set('d', compressed);
       hashParams.set('n', activeDataset.name);
+      
+      // Include ALL loaded Gist URLs
+      datasets.forEach((d, i) => {
+        if (d.url) {
+          hashParams.append('g', d.url);
+        }
+      });
       
       url.hash = hashParams.toString();
       navigator.clipboard.writeText(url.toString());
@@ -591,7 +639,8 @@ export default function App() {
         data: filtered,
         color: COLORS[datasets.length % COLORS.length],
         visible: true,
-        locationCol
+        locationCol,
+        url: gistUrlInput
       };
 
       const newDatasets = [...datasets, newDataset];
@@ -880,7 +929,7 @@ export default function App() {
                       ? (isDarkMode ? "bg-slate-800 border-slate-700" : "bg-white border-blue-200 shadow-sm ring-1 ring-blue-100")
                       : (isDarkMode ? "bg-slate-950/30 border-slate-800 hover:border-slate-700" : "bg-slate-50 border-transparent hover:border-slate-200")
                   )}
-                  onClick={() => setActiveDatasetId(d.id)}
+                  onClick={() => setActiveDatasetId(activeDatasetId === d.id ? null : d.id)}
                 >
                   <div 
                     className="w-3 h-3 rounded-full shrink-0" 
@@ -893,6 +942,20 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
+                    {d.url && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(d.url!);
+                        }}
+                        title="Copy Gist URL"
+                      >
+                        <Copy className="w-3 h-3 text-slate-400" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1151,65 +1214,58 @@ export default function App() {
             <>
               {/* Current Status Bar (Summary of all vehicles) */}
               <div className={cn(
-                "absolute top-4 left-16 z-[1000] backdrop-blur-md rounded-2xl border shadow-2xl flex flex-col p-4 gap-3 transition-all duration-300 max-w-[300px] w-full",
+                "absolute top-4 left-16 z-[1000] backdrop-blur-md rounded-2xl border shadow-2xl flex flex-col p-4 gap-3 transition-all duration-300 max-w-[200px] w-auto",
                 isDarkMode ? "bg-slate-900/95 border-slate-800 shadow-slate-950/50" : "bg-white/95 border-blue-100 shadow-blue-900/10"
               )}>
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3 mb-1">
+                <div className="flex flex-col gap-2">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-blue-500 mb-0.5 tracking-wider">Playback Time</span>
+                    <span className="text-[10px] uppercase font-bold text-blue-500 mb-1 tracking-wider">Playback Time</span>
                     <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-slate-400" />
-                      <span className="text-3xl font-mono font-bold tracking-tight bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded text-blue-600 dark:text-blue-400">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span className="text-2xl font-mono font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
                         {formatInTimeZone(new Date(currentPlayTime), TIMEZONE, 'HH:mm:ss')}
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-wider">Date</span>
-                    <Badge variant="secondary" className="text-[10px] bg-slate-100 dark:bg-slate-800 h-6 font-bold px-3">
+                  <div className="flex flex-col border-t border-slate-100 dark:border-slate-800 pt-2">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 mb-0.5 tracking-wider">Date</span>
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
                       {formatInTimeZone(new Date(currentPlayTime), TIMEZONE, 'dd/MM/yyyy')}
-                    </Badge>
+                    </span>
                   </div>
-                </div>
-                
-                <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                  {datasets.filter(d => d.visible).map(d => {
-                    const point = currentPoints[d.id];
-                    if (!point) return null;
-                    const isHighTemp = point.temp > 30;
-                    const isActive = d.id === activeDatasetId;
-                    
-                    return (
-                      <div 
-                        key={`status-${d.id}`} 
-                        className={cn(
-                          "flex items-center justify-between transition-all",
-                          isActive ? "scale-105" : "opacity-80"
-                        )}
-                      >
-                        <div className="flex items-center gap-2 truncate pr-2">
-                          <div 
-                            className="w-1.5 h-1.5 rounded-full shrink-0" 
-                            style={{ backgroundColor: d.color }}
-                          />
+
+                  <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-2">
+                    {datasets.filter(d => d.visible).map(d => {
+                      const point = currentPoints[d.id];
+                      if (!point) return null;
+                      const isHighTemp = point.temp > 30;
+                      
+                      return (
+                        <div 
+                          key={`status-${d.id}`} 
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <div 
+                              className="w-1.5 h-1.5 rounded-full shrink-0 shadow-sm" 
+                              style={{ backgroundColor: d.color }}
+                            />
+                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">
+                              {d.name}
+                            </span>
+                          </div>
                           <span className={cn(
-                            "text-[11px] truncate leading-tight",
-                            isActive ? "font-bold text-slate-900 dark:text-white" : "font-medium text-slate-500"
+                            "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded",
+                            isHighTemp 
+                              ? "text-red-500 bg-red-50 dark:bg-red-950/30 ring-1 ring-red-200 dark:ring-red-900" 
+                              : "text-slate-500 bg-slate-50 dark:bg-slate-800"
                           )}>
-                            {d.name}
+                            {point.temp.toFixed(1)}°C
                           </span>
                         </div>
-                        <span className={cn(
-                          "text-[10px] font-bold font-mono px-1.5 py-0.5 rounded",
-                          isHighTemp 
-                            ? "text-red-500 bg-red-50 dark:bg-red-950/30" 
-                            : (isActive ? "text-slate-900 dark:text-slate-100" : "text-slate-500")
-                        )}>
-                          {point.temp.toFixed(1)}°C
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

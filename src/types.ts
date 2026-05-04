@@ -13,4 +13,5 @@ export interface Dataset {
   color: string;
   visible: boolean;
   locationCol: string | null;
+  url?: string;
 }
