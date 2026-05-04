@@ -608,53 +608,73 @@ export default function App() {
   const loadFromGist = async () => {
     if (!gistUrlInput) return;
 
+    const urls = gistUrlInput.split(/[\s\n,]+/).filter(u => u.trim().startsWith('http'));
+    if (urls.length === 0) {
+      setError("No valid Gist URLs found.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await fetchGistData(gistUrlInput);
-      let { cleaned, locationCol } = cleanGPSData(result.data);
+      const newDatasetsFromGist: Dataset[] = [];
+      const currentDatasetCount = datasets.length;
 
-      if (cleaned.length === 0) {
-        throw new Error("No valid GPS data found in Gist. Please check the columns and delimiter.");
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        if (currentDatasetCount + newDatasetsFromGist.length >= 20) break;
+
+        try {
+          const result = await fetchGistData(url);
+          let { cleaned, locationCol } = cleanGPSData(result.data);
+
+          if (cleaned.length === 0) continue;
+
+          // User's specific time range requirement:
+          const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
+          const filterEnd = fromZonedTime('2026-03-27 20:00:00', TIMEZONE);
+
+          const filtered = cleaned.filter(point => {
+            const t = point.time.getTime();
+            return t >= filterStart.getTime() && t <= filterEnd.getTime();
+          });
+
+          if (filtered.length > 0) {
+            newDatasetsFromGist.push({
+              id: `gist-${Date.now()}-${i}`,
+              name: result.title || `Gist Route`,
+              data: filtered,
+              color: COLORS[(currentDatasetCount + newDatasetsFromGist.length) % COLORS.length],
+              visible: true,
+              locationCol,
+              url
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to load gist from ${url}:`, err);
+        }
       }
 
-      // User's specific time range requirement:
-      // 3/20/2026 07:00:00 AM to 3/27/2026 08:00:00 PM
-      const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
-      const filterEnd = fromZonedTime('2026-03-27 20:00:00', TIMEZONE);
-
-      const filtered = cleaned.filter(point => {
-        const t = point.time.getTime();
-        return t >= filterStart.getTime() && t <= filterEnd.getTime();
-      });
-
-      if (filtered.length === 0) {
-        throw new Error(`Data range mismatch. Expected 20-27 Mar 2026. Found range: ${formatInTimeZone(cleaned[0].time, TIMEZONE, 'dd/MM/yy HH:mm')} to ${formatInTimeZone(cleaned[cleaned.length-1].time, TIMEZONE, 'dd/MM/yy HH:mm')}`);
+      if (newDatasetsFromGist.length === 0) {
+        throw new Error("No valid GPS data found in any of the provided Gists within the required date range.");
       }
 
-      const newDataset: Dataset = {
-        id: `gist-${Date.now()}`,
-        name: result.title || `Gist Route`,
-        data: filtered,
-        color: COLORS[datasets.length % COLORS.length],
-        visible: true,
-        locationCol,
-        url: gistUrlInput
-      };
-
-      const newDatasets = [...datasets, newDataset];
-      setDatasets(newDatasets);
-      setActiveDatasetId(newDataset.id);
+      const updatedDatasets = [...datasets, ...newDatasetsFromGist];
+      setDatasets(updatedDatasets);
+      
+      // Set the first newly loaded dataset as active
+      setActiveDatasetId(newDatasetsFromGist[0].id);
       
       if (datasets.length === 0) {
-        setCurrentPlayTime(filtered[0].time.getTime());
+        setCurrentPlayTime(newDatasetsFromGist[0].data[0].time.getTime());
       }
       
       setIsPlaying(true);
+      // Clear input on success
+      setGistUrlInput("");
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to load Gist data");
+      setError(err instanceof Error ? err.message : "Failed to load Gists");
     } finally {
       setIsLoading(false);
     }
@@ -882,22 +902,22 @@ export default function App() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Gist URL..." 
+            <div className="flex flex-col gap-2">
+              <textarea 
+                placeholder="Paste Gist URLs here (one per line)..." 
                 value={gistUrlInput}
                 onChange={(e) => setGistUrlInput(e.target.value)}
                 className={cn(
-                  "text-[10px] h-9 transition-all focus:ring-2 focus:ring-blue-500/20",
+                  "text-[10px] min-h-[80px] w-full p-2 rounded-md border transition-all focus:ring-2 focus:ring-blue-500/20 resize-none",
                   isDarkMode 
-                    ? "bg-slate-950/50 border-slate-800 focus:border-blue-500/50" 
-                    : "bg-slate-50 border-slate-200 focus:border-blue-400"
+                    ? "bg-slate-950/50 border-slate-800 focus:border-blue-500/50 text-slate-300 placeholder:text-slate-600" 
+                    : "bg-slate-50 border-slate-200 focus:border-blue-400 text-slate-700 placeholder:text-slate-400"
                 )}
               />
               <Button
                 variant="outline"
                 className={cn(
-                  "h-9 px-3 flex items-center gap-2 border-dashed transition-all hover:scale-[0.98] active:scale-95",
+                  "h-9 w-full flex items-center justify-center gap-2 border-dashed transition-all hover:scale-[0.98] active:scale-95",
                   isDarkMode 
                     ? "border-slate-800 bg-slate-950/20 text-slate-400 hover:bg-slate-800 hover:text-slate-200" 
                     : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
@@ -906,7 +926,7 @@ export default function App() {
                 disabled={!gistUrlInput || isLoading}
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">{isLoading ? 'Wait...' : 'Link'}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest">{isLoading ? 'Loading...' : 'Link Bulk Gists'}</span>
               </Button>
             </div>
           </div>
