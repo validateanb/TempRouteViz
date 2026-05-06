@@ -55,6 +55,7 @@ async function startServer() {
       }
       
       const text = await response.text();
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.json({ data: text, title });
     } catch (error) {
       console.error("Proxy error:", error);
