@@ -374,36 +374,15 @@ export default function App() {
             const { cleaned, locationCol } = cleanGPSData(result.data);
             
             if (cleaned.length > 0) {
-              // Apply standard time filtering
-              const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
-              const filterEnd = fromZonedTime('2026-03-28 23:59:59', TIMEZONE);
-
-              const filtered = cleaned.filter(point => {
-                const t = point.time.getTime();
-                return t >= filterStart.getTime() && t <= filterEnd.getTime();
+              loadedDatasets.push({
+                id: `gist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                name: result.title || `Gist Route`,
+                data: cleaned,
+                color: COLORS[loadedDatasets.length % COLORS.length],
+                visible: true,
+                locationCol,
+                url
               });
-
-              if (filtered.length > 0) {
-                loadedDatasets.push({
-                  id: `gist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                  name: result.title || `Gist Route`,
-                  data: filtered,
-                  color: COLORS[loadedDatasets.length % COLORS.length],
-                  visible: true,
-                  locationCol,
-                  url
-                });
-              } else {
-                const first = cleaned[0].time;
-                const last = cleaned[cleaned.length - 1].time;
-                const rangeStr = `${formatInTimeZone(first, TIMEZONE, 'dd/MM HH:mm')} - ${formatInTimeZone(last, TIMEZONE, 'dd/MM HH:mm')}`;
-                newWarnings.push({
-                  url,
-                  title: result.title,
-                  message: `Data found (${rangeStr}) but falls outside strict fleet window (20-28 Mar).`
-                });
-                console.warn(`Gist ${url} loaded but contained no data in range 2026-03-20 to 2026-03-28`);
-              }
             } else {
               newWarnings.push({
                 url,
@@ -415,7 +394,7 @@ export default function App() {
             console.error(`Failed to load Gist from URL: ${url}`, err);
             newWarnings.push({
               url,
-              message: "Network error: Failed to connect or fetch data."
+              message: err instanceof Error ? err.message : "Network error: Failed to connect or fetch data."
             });
           }
         }
@@ -683,7 +662,6 @@ export default function App() {
       const newDatasetsFromGist: Dataset[] = [];
       const currentDatasetCount = datasets.length;
       let loadedCount = 0;
-      let filterCount = 0;
 
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
@@ -707,43 +685,29 @@ export default function App() {
             continue;
           }
 
-          // User's specific time range requirement:
-          const filterStart = fromZonedTime('2026-03-20 07:00:00', TIMEZONE);
-          const filterEnd = fromZonedTime('2026-03-28 23:59:59', TIMEZONE);
-
-          const filtered = cleaned.filter(point => {
-            const t = point.time.getTime();
-            return t >= filterStart.getTime() && t <= filterEnd.getTime();
-          });
-
-          if (filtered.length > 0) {
+          if (cleaned.length > 0) {
             newDatasetsFromGist.push({
               id: `gist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: result.title || `Gist Route`,
-              data: filtered,
+              data: cleaned,
               color: COLORS[(currentDatasetCount + newDatasetsFromGist.length) % COLORS.length],
               visible: true,
               locationCol,
               url
             });
             loadedCount++;
-          } else if (cleaned.length > 0) {
-            filterCount++;
-            const first = cleaned[0].time;
-            const last = cleaned[cleaned.length - 1].time;
-            const rangeStr = `${formatInTimeZone(first, TIMEZONE, 'dd/MM HH:mm')} - ${formatInTimeZone(last, TIMEZONE, 'dd/MM HH:mm')}`;
+          } else {
             newWarnings.push({
               url,
               title: result.title,
-              message: `Filtered: Data found (${rangeStr}) but outside 20-28 Mar window.`
+              message: "Format error: No data points were recovered from this Gist."
             });
-            console.warn(`Gist ${url} found but outside range. Found: ${rangeStr}`);
           }
         } catch (err) {
           console.error(`Failed to load gist from ${url}:`, err);
           newWarnings.push({
             url,
-            message: "Connection failed: Could not reach Gist server."
+            message: err instanceof Error ? err.message : "Connection failed: Could not reach Gist server."
           });
         }
       }
@@ -768,11 +732,7 @@ export default function App() {
           setTimeout(() => setError(null), 5000);
         }
       } else {
-        if (filterCount > 0) {
-          throw new Error(`Data found but all records were outside 20-28 Mar 2026 range.`);
-        } else {
-          throw new Error("No valid GPS data found in the provided Gists.");
-        }
+        throw new Error("No valid GPS data found in the provided Gists.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Gists");

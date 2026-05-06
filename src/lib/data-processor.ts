@@ -15,16 +15,30 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
   };
   if (data.length === 0) return { cleaned: [], locationCol: null };
 
-  const originalCols = Object.keys(data[0] || {});
+  let originalCols = Object.keys(data[0] || {});
   
+  // Robustness check: If only one column is found but it contains tabs, 
+  // it's possible delimiter detection failed in Papaparse
+  if (originalCols.length === 1 && originalCols[0].includes('\t')) {
+    const forcedData = data.map(row => {
+      const line = row[originalCols[0]];
+      const parts = line.split('\t');
+      const headers = originalCols[0].split('\t');
+      const obj: any = {};
+      headers.forEach((h, i) => obj[h] = parts[i]);
+      return obj;
+    });
+    return cleanGPSData(forcedData);
+  }
+
   originalCols.forEach(c => {
-    const lc = c.toLowerCase();
+    const lc = c.toLowerCase().trim();
     // Use arrays to store multiple matches (e.g. "Date" and "Time")
-    if (lc === 'date' || lc === 'time' || lc.includes('time') || lc.includes('date')) {
+    if (lc === 'date' || lc === 'time' || lc === 'datetime' || lc.includes('time') || lc.includes('date')) {
       colMap['time'].push(c);
     }
-    else if (lc.includes('lat')) colMap['lat'].push(c);
-    else if (lc.includes('long') || lc.includes('lng')) colMap['long'].push(c);
+    else if (lc.includes('lat') || lc === 'y' || lc.includes('latitude')) colMap['lat'].push(c);
+    else if (lc.includes('long') || lc.includes('lng') || lc === 'x' || lc.includes('longitude')) colMap['long'].push(c);
     else if (lc.includes('temp')) colMap['temp'].push(c);
   });
 
@@ -53,26 +67,39 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
           time = fromZonedTime(isoStr, TIMEZONE);
         } else {
           // Parse string combinations
-          const cleanedTimeVal = timeStr.replace(/\s+/g, ' ');
+          // Standardize separators for better parsing
+          const cleanedTimeVal = timeStr.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim();
           
           // Try common formats
           const formats = [
             'M/d/yyyy h:mm:ss a',
             'M/d/yyyy hh:mm:ss a',
+            'M/d/yyyy h:mm a',
+            'M/d/yyyy hh:mm a',
             'M/d/yyyy HH:mm:ss',
             'd/M/yyyy h:mm:ss a',
             'd/M/yyyy hh:mm:ss a',
             'yyyy-MM-dd HH:mm:ss',
             'dd/MM/yyyy HH:mm:ss',
-            'M/d/yyyy h:mm a',
             'MM/dd/yyyy HH:mm:ss',
             'd/M/yy HH:mm:ss',
-            'M/d/yy HH:mm:ss'
+            'M/d/yy HH:mm:ss',
+            'M/d/yyyy',
+            'yyyy-MM-dd'
           ];
           
           for (const fmt of formats) {
             try {
-              const p = parseDate(cleanedTimeVal, fmt, new Date());
+              // Try uppercase AM/PM
+              let p = parseDate(cleanedTimeVal, fmt, new Date());
+              if (isNaN(p.getTime())) {
+                // Try lowercase am/pm if format has 'a'
+                if (fmt.endsWith('a')) {
+                   const lowerTime = cleanedTimeVal.toLowerCase();
+                   p = parseDate(lowerTime, fmt, new Date());
+                }
+              }
+
               if (!isNaN(p.getTime())) {
                 const naiveStr = p.getFullYear() + '-' + 
                               String(p.getMonth() + 1).padStart(2, '0') + '-' + 
@@ -99,9 +126,13 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
       const longCol = colMap['long'][0];
       const tempCol = colMap['temp'][0];
 
-      const lat = latCol ? parseFloat(String(row[latCol]).replace(/,/g, '')) : NaN;
-      const long = longCol ? parseFloat(String(row[longCol]).replace(/,/g, '')) : NaN;
-      const temp = tempCol ? parseFloat(String(row[tempCol]).replace(/,/g, '')) : NaN;
+      const latValue = latCol ? String(row[latCol]).replace(/,/g, '').trim() : '';
+      const longValue = longCol ? String(row[longCol]).replace(/,/g, '').trim() : '';
+      const tempValue = tempCol ? String(row[tempCol]).replace(/,/g, '').trim() : '';
+
+      const lat = parseFloat(latValue);
+      const long = parseFloat(longValue);
+      const temp = parseFloat(tempValue);
       const location = locationCol ? row[locationCol] : undefined;
 
       return { time: time || new Date(0), lat, long, temp, location };
@@ -110,8 +141,8 @@ export const cleanGPSData = (data: any[]): { cleaned: GPSData[], locationCol: st
       !isNaN(row.time.getTime()) && 
       row.time.getTime() !== 0 &&
       !isNaN(row.lat) && 
-      !isNaN(row.long) && 
-      !isNaN(row.temp)
+      !isNaN(row.long)
+      // Temp is now optional
     )
     .sort((a, b) => a.time.getTime() - b.time.getTime());
 
@@ -157,7 +188,17 @@ export const parseFile = async (file: File): Promise<any[]> => {
 export const fetchGistData = async (url: string): Promise<{ data: any[], title: string }> => {
   // Use proxy to avoid CORS
   const response = await fetch(`/api/proxy-gist?url=${encodeURIComponent(url)}`);
-  if (!response.ok) throw new Error('Failed to fetch Gist data via proxy');
+  
+  if (!response.ok) {
+    let errorMsg = 'Failed to fetch Gist data via proxy';
+    try {
+      const errorJson = await response.json();
+      if (errorJson.error) errorMsg = errorJson.error;
+    } catch (e) {
+      // Fallback if not JSON
+    }
+    throw new Error(errorMsg);
+  }
   
   const json = await response.json();
   const { data: text, title } = json;
