@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const response = await fetch(rawUrl, { headers });
     if (!response.ok) {
-      throw new Error(`Failed to fetch from GitHub: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch from GitHub (URL: ${rawUrl}): ${response.status} ${response.statusText}`);
     }
     
     const text = await response.text();
