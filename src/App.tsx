@@ -1325,7 +1325,7 @@ export default function App() {
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 border-t border-border pt-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  <div className="space-y-1.5 border-t border-border pt-2">
                     {datasets.filter(d => d.visible).map(d => {
                       const point = currentPoints[d.id];
                       if (!point) return null;
